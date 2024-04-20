@@ -72,7 +72,7 @@ export const authLogin = async (req, res) => {
         }
         if (result) {
           // credentials authentication completed need to create or update session
-          sessionHandler(req, res, user);
+          createSession(req, res, user);
         } else {
           // response is OutgoingMessage object that server response http request
           return sendErrorResponse(res, { message: 'passwords do not match', statusCode: 400 });
@@ -80,6 +80,27 @@ export const authLogin = async (req, res) => {
     });
 }
 
+/**
+ * 
+ * @param {*} req 
+ * @param {*} res 
+ */
+export const emailVerify = async (req, res) => {
+
+    const user = await User.findOne({authentication_token: req.body.authentication_token}).exec();
+
+    if (!user) {
+        return sendErrorResponse(res, { message: 'Invalid authentication token', statusCode: 400 });
+    }
+
+    if (user.otp != req.body.otp) {
+        return sendErrorResponse(res, { message: 'Invalid OTP', statusCode: 400 });
+    } else {
+        user.email_verified = 1;
+        user.save();
+        createSession(req, res, user);
+    }
+}
 
 /**
  * 
@@ -87,12 +108,13 @@ export const authLogin = async (req, res) => {
  * @param {*} res 
  * @param {*} user 
  */
-const sessionHandler = async (req, res, user) => {
+const createSession = async (req, res, user) => {
 
     // create a new session 
 
     const session = {
         user_id: user._id,
+        session_meta: req.body.session_meta,
         session_token: jwt.sign({email:user.email, _id: user._id}, env.JWT_SECRET)
     }
 

@@ -1,0 +1,245 @@
+#!/usr/bin/env node
+
+const { Command } = require('commander');
+const fs = require('fs-extra');
+const path = require('path');
+
+const program = new Command();
+
+const templateFiles = {
+    Messages: (moduleName) => `export const ${moduleName}Messages = {
+    OK: 'Success',
+    ${moduleName.toUpperCase()}_CREATED: 'A new ${moduleName.toLowerCase()} created successfully',
+    BAD_REQUEST: 'Bad request, request payload is wrong',
+    ${moduleName.toUpperCase()}_NOT_FOUND: 'Requested ${moduleName.toLowerCase()} not found in the database'
+};`,
+
+    Router: (moduleName) => `import express from 'express';
+import ${moduleName}Controller from '../controllers/${moduleName}Controller';
+
+const ${moduleName.toLowerCase()}Router = express.Router();
+
+${moduleName.toLowerCase()}Router.get('/', ${moduleName}Controller.list${moduleName}s);
+${moduleName.toLowerCase()}Router.post('/', ${moduleName}Controller.create${moduleName});
+${moduleName.toLowerCase()}Router.get('/:id', ${moduleName}Controller.get${moduleName});
+${moduleName.toLowerCase()}Router.put('/:id', ${moduleName}Controller.update${moduleName});
+${moduleName.toLowerCase()}Router.delete('/:id', ${moduleName}Controller.delete${moduleName});
+
+export default ${moduleName.toLowerCase()}Router;`,
+
+    Controller: (moduleName) => `import { HttpStatus } from '../../../utils/HttpUtil';
+import { errorResponse, successResponse } from '../../../utils/ResponseUtil';
+import { ${moduleName}Messages } from '../messages/${moduleName}Messages'; 
+import ${moduleName}Service from '../services/${moduleName}Service';
+
+class ${moduleName}Controller {
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @returns 
+     */
+    async create${moduleName}(req, res) {
+        try {
+            const ${moduleName.toLowerCase()} = await ${moduleName}Service.create${moduleName}(req.body);
+            return successResponse(res, HttpStatus.CREATED, ${moduleName}Messages.${moduleName.toUpperCase()}_CREATED, ${moduleName.toLowerCase()});
+        } catch (error) {
+            return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.BAD_REQUEST, { message: error.message });
+        }
+    }
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @returns 
+     */
+    async list${moduleName}s(req, res) {
+        try {
+            const ${moduleName.toLowerCase()}s = await ${moduleName}Service.list${moduleName}s();
+            return successResponse(res, HttpStatus.OK, ${moduleName}Messages.OK, ${moduleName.toLowerCase()}s);
+        } catch (error) {
+            return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.BAD_REQUEST, { message: error.message });
+        }
+    }
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @returns 
+     */
+    async get${moduleName}(req, res) {
+        try {
+            const ${moduleName.toLowerCase()} = await ${moduleName}Service.get${moduleName}ById(req.params.id);
+            if (!${moduleName.toLowerCase()}) return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.${moduleName.toUpperCase()}_NOT_FOUND, { message: ${moduleName}Messages.${moduleName.toUpperCase()}_NOT_FOUND });
+            return successResponse(res, HttpStatus.OK, ${moduleName}Messages.OK, ${moduleName.toLowerCase()});
+        } catch (error) {
+            return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.BAD_REQUEST, { message: error.message });
+        }
+    }
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @returns 
+     */
+    async update${moduleName}(req, res) {
+        try {
+            const ${moduleName.toLowerCase()} = await ${moduleName}Service.update${moduleName}ById(req.params.id, req.body);
+            if (!${moduleName.toLowerCase()}) return res.status(404).json({ message: '${moduleName} not found' });
+            res.json(${moduleName.toLowerCase()});
+        } catch (error) {
+            return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.BAD_REQUEST, { message: error.message });
+        }
+    }
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @returns 
+     */
+    async delete${moduleName}(req, res) {
+        try {
+            const ${moduleName.toLowerCase()} = await ${moduleName}Service.delete${moduleName}ById(req.params.id);
+            if (!${moduleName.toLowerCase()}) return res.status(404).json({ message: '${moduleName} not found' });
+            res.json({ message: '${moduleName} deleted' });
+        } catch (error) {
+            return errorResponse(res, HttpStatus.BAD_REQUEST, ${moduleName}Messages.BAD_REQUEST, { message: error.message });
+        }
+    }
+}
+
+export default new ${moduleName}Controller();`,
+
+    Model: (moduleName) => `import mongoose from 'mongoose';
+
+const options = {
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    versionKey: false,
+    toJSON: { virtuals: true }, 
+    toObject: { virtuals: true }
+};
+
+const ${moduleName.toLowerCase()}Schema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    description: {
+        type: String,
+        required: false,
+    },
+}, options);
+
+export const ${moduleName} = mongoose.model('${moduleName}', ${moduleName.toLowerCase()}Schema);`,
+
+    Service: (moduleName) => `import { ${moduleName} } from '../models/${moduleName}Model';
+
+class ${moduleName}Service {
+    
+    async create${moduleName}(${moduleName.toLowerCase()}Data) {
+        const ${moduleName.toLowerCase()} = new ${moduleName}(${moduleName.toLowerCase()}Data);
+        return await ${moduleName.toLowerCase()}.save();
+    }
+
+    async list${moduleName}s() {
+        return await ${moduleName}.find();
+    }
+
+    async get${moduleName}ById(id) {
+        return await ${moduleName}.findById(id);
+    }
+
+    async update${moduleName}ById(id, ${moduleName.toLowerCase()}Data) {
+        return await ${moduleName}.findByIdAndUpdate(id, ${moduleName.toLowerCase()}Data, { new: true });
+    }
+
+    async delete${moduleName}ById(id) {
+        return await ${moduleName}.findByIdAndDelete(id);
+    }
+}
+
+export default new ${moduleName}Service();`,
+
+    Middleware: (moduleName) => `
+
+    /**
+     * 
+     * @param {*} req 
+     * @param {*} res 
+     * @param {*} next 
+     */
+    export const ${moduleName}Middleware = (req, res, next) => {
+        console.log('Processing ${moduleName} middleware...');
+        // Add custom middleware logic here (e.g., validation, logging)
+        next();
+    };`
+};
+
+function capitalizeFirstName(name) {
+    if (typeof name !== 'string' || name.length === 0) {
+        return name; // return as is if not a valid string
+    }
+    return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+async function generateModule(moduleName) {
+    const moduleDir = path.join(process.cwd(), 'src', 'app', moduleName);
+    const subDirs = ['controllers', 'messages', 'middlewares', 'models', 'routes', 'services'];
+
+    // Ensure all subdirectories exist
+    for (const subDir of subDirs) {
+        await fs.ensureDir(path.join(moduleDir, subDir));
+    }
+
+    // Generate the files
+    for (const [fileName, templateFn] of Object.entries(templateFiles)) {
+        let dir = moduleDir;
+        switch (fileName) {
+            case 'Messages':
+                dir += '/messages';
+                break;
+            case 'Router':
+                dir += '/routes';
+                break;
+            case 'Controller':
+                dir += '/controllers';
+                break;
+            case 'Model':
+                dir += '/models';
+                break;
+            case 'Service':
+                dir += '/services';
+                break;
+            case 'Middleware':
+                dir += '/middlewares';
+                break;
+                
+            default:
+                break;
+        }
+        const filePath = path.join(dir, `${capitalizeFirstName(moduleName)}${fileName}.js`);
+        await fs.writeFile(filePath, templateFn(capitalizeFirstName(moduleName)), 'utf8');
+    }
+    console.log(`Created: module ${moduleName}`);
+}
+
+program
+    .command('generate <moduleName>')
+    .description('Generate a new module with specified name')
+    .action(async (moduleName) => {
+        generateModule(moduleName);
+    });
+program
+    .command('g <moduleName>')
+    .description('Generate a new module with specified name')
+    .action(async (moduleName) => {
+        generateModule(moduleName);
+    });
+
+program.parse(process.argv);

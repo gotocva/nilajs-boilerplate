@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+
+const { Command } = require('commander');
+const fs = require('fs-extra');
+const path = require('path');
+const pm2 = require('pm2');
+
+const program = new Command();
+
+
+function deleteAll() {
+  pm2.connect(function(err) {
+    if (err) {
+      console.error(err)
+      process.exit(2)
+    }
+  
+    pm2.list((err, list) => {
+      list.forEach((l) => {
+          pm2.delete(l.name);
+          console.log(`process ${l.name} deleted`);
+      });
+    });
+  });
+}
+program
+.command('deleteAll')
+.description('Delete all pm2 running services')
+.action(async (moduleName) => {
+  deleteAll();
+});
+
+program
+    .command('list')
+    .description('Delete all pm2 running services')
+    .action(async (moduleName) => {
+      pm2.connect(function(err) {
+        if (err) {
+          console.error(err)
+          process.exit(2)
+        }
+      
+        pm2.list((err, list) => {  
+          if (list.length == 0) {
+            console.log(`No PM2 process found`);
+            process.exit(-1);
+            return;
+          }    
+          list.forEach((l) => {
+            console.log(l.name, l.pid, l.monit, l.pm2_env.status);
+          });
+          setTimeout(() => {
+            process.exit(-1);
+            return;
+          }, 2000);
+        });
+    });
+});
+
+program.parse(process.argv);
